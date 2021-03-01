@@ -40,6 +40,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import com.google.solutions.ml.api.vision.videointelligence.VideoAnnotationResponseProcessor;
+import com.google.solutions.ml.api.vision.videointelligence.VideoLabelAnnotationProcessor;
+import com.google.solutions.ml.api.vision.videointelligence.VideoObjectTrackingAnnotationProcessor;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.FileIO;
@@ -140,19 +144,20 @@ public class VisionAnalyticsPipeline {
                 "Annotate Images",
                 ParDo.of(new AnnotateImagesDoFn(options.getFeatures())));
 
-    Map<String, AnnotateImageResponseProcessor> processors = configureProcessors(options);
+    Map<String, AnnotateImageResponseProcessor> imageProcessors = configureImageProcessors(options);
+    Map<String, VideoAnnotationResponseProcessor> videoProcessors = configureVideoProcessors(options);
 
     PCollection<KV<BQDestination, TableRow>> annotationOutcome =
         annotatedImages.apply(
             "Process Annotations",
-            ParDo.of(ProcessImageResponseDoFn.create(ImmutableSet.copyOf(processors.values()))));
+            ParDo.of(ProcessImageResponseDoFn.create(ImmutableSet.copyOf(imageProcessors.values()))));
 
     annotationOutcome.apply("Write To BigQuery", new BigQueryDynamicWriteTransform(
         BQDynamicDestinations.builder()
             .projectId(options.getVisionApiProjectId())
             .datasetId(options.getDatasetName())
             .tableNameToTableDetailsMap(
-                tableNameToTableDetailsMap(processors)).build())
+                tableNameToTableDetailsMap(imageProcessors)).build())
     );
 
     collectBatchStatistics(batchedImageURIs, options);
@@ -296,7 +301,7 @@ public class VisionAnalyticsPipeline {
    *
    * If additional processors are needed they should be configured in this method.
    */
-  private static Map<String, AnnotateImageResponseProcessor> configureProcessors(
+  private static Map<String, AnnotateImageResponseProcessor> configureImageProcessors(
       VisionAnalyticsPipelineOptions options) {
     Map<String, AnnotateImageResponseProcessor> result = new HashMap<>();
 
@@ -320,6 +325,24 @@ public class VisionAnalyticsPipeline {
 
     tableName = options.getErrorLogTable();
     result.put(tableName, new ErrorProcessor(tableName));
+
+    return result;
+  }
+
+  /**
+   * Creates a map of well-known {@link VideoAnnotationResponseProcessor}s.
+   *
+   * If additional processors are needed they should be configured in this method.
+   */
+  private static Map<String, VideoAnnotationResponseProcessor> configureVideoProcessors(
+          VisionAnalyticsPipelineOptions options) {
+    Map<String, VideoAnnotationResponseProcessor> result = new HashMap<>();
+
+    String tableName = options.getVideoObjectTrackingAnnotationsTable();
+    result.put(tableName, new VideoObjectTrackingAnnotationProcessor(tableName));
+
+    tableName = options.getVideoLabelAnnotationsTable();
+    result.put(tableName, new VideoLabelAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     return result;
   }

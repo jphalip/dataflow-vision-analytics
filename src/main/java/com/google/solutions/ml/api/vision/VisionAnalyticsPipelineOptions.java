@@ -17,6 +17,8 @@ package com.google.solutions.ml.api.vision;
 
 import com.google.cloud.vision.v1.Feature;
 import java.util.List;
+import java.util.Set;
+
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
 import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.Description;
@@ -121,9 +123,27 @@ public interface VisionAnalyticsPipelineOptions extends DataflowPipelineOptions 
 
   void setCropHintAnnotationTable(String value);
 
+  @Description("Table name for video object tracking annotations")
+  @Validation.Required
+  String getVideoObjectTrackingAnnotationsTable();
+
+  void setVideoObjectTrackingAnnotationsTable(String value);
+
+  @Description("Table name for video label annotations")
+  @Validation.Required
+  String getVideoLabelAnnotationsTable();
+
+  void setVideoLabelAnnotationsTable(String value);
+
   @Description("Table name for error logs")
   @Default.String("error_log")
   String getErrorLogTable();
 
   void setErrorLogTable(String value);
+
+  @Description("GCS metadata values to store in BigQuery")
+  @Validation.Required
+  Set<String> getMetadataKeys();
+
+  void setMetadataKeys(Set<String> value);
 }
