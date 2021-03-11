@@ -36,9 +36,9 @@ abstract public class BQDynamicDestinations extends
 
   private final static long serialVersionUID = 1L;
 
-  abstract String projectId();
+  abstract String project();
 
-  abstract String datasetId();
+  abstract String datasetName();
 
   abstract Map<String, TableDetails> tableNameToTableDetailsMap();
 
@@ -53,8 +53,8 @@ abstract public class BQDynamicDestinations extends
     TableDetails tableDetails = tableDetails(destination);
     return new TableDestination(
         new TableReference()
-            .setProjectId(projectId())
-            .setDatasetId(datasetId())
+            .setProjectId(project())
+            .setDatasetId(datasetName())
             .setTableId(destination.getTableName()),
         tableDetails.description(),
         tableDetails.timePartitioningJson(),
@@ -81,9 +81,9 @@ abstract public class BQDynamicDestinations extends
   @AutoValue.Builder
   public abstract static class Builder {
 
-    public abstract Builder projectId(String projectId);
+    public abstract Builder project(String projectId);
 
-    public abstract Builder datasetId(String datasetId);
+    public abstract Builder datasetName(String datasetId);
 
     public abstract Builder tableNameToTableDetailsMap(
         Map<String, TableDetails> tableNameToTableDetailsMap);

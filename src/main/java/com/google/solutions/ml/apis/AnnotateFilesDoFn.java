@@ -74,7 +74,6 @@ public class AnnotateFilesDoFn extends DoFn<Iterable<GCSFileInfo>, KV<GCSFileInf
             responses.addAll(videoAnnotator.processFiles(videoFiles));
         }
 
-        int index = 0;
         for (KV<GCSFileInfo, GeneratedMessageV3> response : responses) {
             out.output(response);
         }

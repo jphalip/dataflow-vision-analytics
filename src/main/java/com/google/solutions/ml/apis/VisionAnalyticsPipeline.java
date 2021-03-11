@@ -102,7 +102,8 @@ public class VisionAnalyticsPipeline {
       "video/mov", "video/mpeg4", "video/mp4", "video/avi"
   );
 
-  public static final Set<String> SUPPORTED_CONTENT_TYPES = Sets.union(SUPPORTED_IMAGE_CONTENT_TYPES, SUPPORTED_VIDEO_CONTENT_TYPES);
+  public static final Set<String> SUPPORTED_CONTENT_TYPES =
+      Sets.union(SUPPORTED_IMAGE_CONTENT_TYPES, SUPPORTED_VIDEO_CONTENT_TYPES).immutableCopy();
 
   public static final String ACCEPTED_IMAGE_FILE_PATTERN = "JPEG|jpeg|JPG|jpg|PNG|png|GIF|gif|TIFF|tiff|TIF|tif";
 
@@ -137,7 +138,7 @@ public class VisionAnalyticsPipeline {
     Pipeline p = Pipeline.create(options);
 
     PCollection<GCSFileInfo> fileInfos;
-    if (options.getSubscriberId() != null) {
+    if (options.getInputNotificationSubscription() != null) {
       fileInfos = convertPubSubNotificationsToGCSFileInfos(p, options);
     } else if (options.getFileList() != null) {
       fileInfos = listGCSFiles(p, options);
@@ -166,8 +167,8 @@ public class VisionAnalyticsPipeline {
 
     annotationOutcome.apply("Write To BigQuery", new BigQueryDynamicWriteTransform(
         BQDynamicDestinations.builder()
-            .projectId(options.getVisionApiProjectId())
-            .datasetId(options.getDatasetName())
+            .project(options.getProject())
+            .datasetName(options.getDatasetName())
             .tableNameToTableDetailsMap(
                 tableNameToTableDetailsMap(processors)).build())
     );
@@ -214,7 +215,7 @@ public class VisionAnalyticsPipeline {
     }
     batchInfo.apply(
         BigQueryIO.writeTableRows()
-            .to(new TableReference().setProjectId(options.getVisionApiProjectId())
+            .to(new TableReference().setProjectId(options.getProject())
                 .setDatasetId(options.getDatasetName()).setTableId("batch_info"))
             .withWriteDisposition(WriteDisposition.WRITE_APPEND)
             .withoutValidation()
@@ -259,7 +260,7 @@ public class VisionAnalyticsPipeline {
       Pipeline p, VisionAnalyticsPipelineOptions options) {
     PCollection<GCSFileInfo> gcsFileInfos;
     PCollection<PubsubMessage> pubSubNotifications = p.begin().apply("Read PubSub",
-        PubsubIO.readMessagesWithAttributes().fromSubscription(options.getSubscriberId()));
+        PubsubIO.readMessagesWithAttributes().fromSubscription(options.getInputNotificationSubscription()));
     gcsFileInfos = pubSubNotifications
         .apply("PubSub to GCS URIs",
             ParDo.of(PubSubNotificationToGCSInfoDoFn.create(SUPPORTED_CONTENT_TYPES)))
@@ -320,22 +321,22 @@ public class VisionAnalyticsPipeline {
 
     // Image processors ------------------------------------------------------------------------------
 
-    String tableName = options.getLabelAnnotationTable();
+    String tableName = options.getImageLabelAnnotationTable();
     result.put(tableName, new LabelAnnotationProcessor(tableName));
 
-    tableName = options.getLandmarkAnnotationTable();
+    tableName = options.getImageLandmarkAnnotationTable();
     result.put(tableName, new LandmarkAnnotationProcessor(tableName));
 
-    tableName = options.getLogoAnnotationTable();
+    tableName = options.getImageLogoAnnotationTable();
     result.put(tableName, new LogoAnnotationProcessor(tableName));
 
-    tableName = options.getFaceAnnotationTable();
+    tableName = options.getImageFaceAnnotationTable();
     result.put(tableName, new FaceAnnotationProcessor(tableName));
 
     tableName = options.getImagePropertiesTable();
     result.put(tableName, new ImagePropertiesProcessor(tableName));
 
-    tableName = options.getCropHintAnnotationTable();
+    tableName = options.getImageCropHintAnnotationTable();
     result.put(tableName, new CropHintAnnotationProcessor(tableName));
 
     tableName = options.getErrorLogTable();
@@ -343,10 +344,10 @@ public class VisionAnalyticsPipeline {
 
     // Video processors ------------------------------------------------------------------------------
 
-    tableName = options.getVideoObjectTrackingAnnotationsTable();
+    tableName = options.getVideoObjectTrackingAnnotationTable();
     result.put(tableName, new VideoObjectTrackingAnnotationProcessor(tableName));
 
-    tableName = options.getVideoLabelAnnotationsTable();
+    tableName = options.getVideoLabelAnnotationTable();
     result.put(tableName, new VideoLabelAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     return result;

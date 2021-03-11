@@ -47,12 +47,13 @@ public class VideoAnnotator {
                 StreamingObjectTrackingConfig.newBuilder().build();
         StreamingLabelDetectionConfig labelConfig =
                 StreamingLabelDetectionConfig.newBuilder().build();
-        this.streamingVideoConfig =
-                StreamingVideoConfig.newBuilder()
-                        .setFeature(feature)
-                        .setObjectTrackingConfig(objectTrackingConfig)
-                        .setLabelDetectionConfig(labelConfig)
-                        .build();
+        StreamingVideoConfig.Builder builder = StreamingVideoConfig.newBuilder()
+            .setObjectTrackingConfig(objectTrackingConfig)
+            .setLabelDetectionConfig(labelConfig);
+        if (feature != null) {
+            builder = builder.setFeature(feature);
+        }
+        this.streamingVideoConfig = builder.build();
         this.client = StreamingVideoIntelligenceServiceClient.create();
     }
 

@@ -52,8 +52,10 @@ public class ImageAnnotator {
   private final ImageAnnotatorClient client;
 
   public ImageAnnotator(List<Feature.Type> featureTypes) {
-    featureTypes.forEach(
-        type -> featureList.add(Feature.newBuilder().setType(type).build()));
+    if (featureTypes != null) {
+      featureTypes.forEach(
+          type -> featureList.add(Feature.newBuilder().setType(type).build()));
+    }
 
     try {
       client = ImageAnnotatorClient.create();

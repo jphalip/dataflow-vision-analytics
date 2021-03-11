@@ -30,10 +30,10 @@ import org.apache.beam.sdk.options.Validation;
  */
 public interface VisionAnalyticsPipelineOptions extends DataflowPipelineOptions {
 
-  @Description("Pub/Sub subscription to receive messages from")
-  String getSubscriberId();
+  @Description("Pub/Sub subscription ID to receive input Cloud Storage notifications from")
+  String getInputNotificationSubscription();
 
-  void setSubscriberId(String value);
+  void setInputNotificationSubscription(String value);
 
   @Description("Google Cloud Storage files to process")
   List<String> getFileList();
@@ -64,14 +64,7 @@ public interface VisionAnalyticsPipelineOptions extends DataflowPipelineOptions 
 
   void setDatasetName(String value);
 
-  @Description("Project id to be used for Vision API requests and BigQuery dataset")
-  @Validation.Required
-  String getVisionApiProjectId();
-
-  void setVisionApiProjectId(String value);
-
   @Description("Vision API features to use")
-  @Validation.Required
   List<Feature.Type> getImageFeatures();
 
   void setImageFeatures(List<Feature.Type> value);
@@ -93,29 +86,29 @@ public interface VisionAnalyticsPipelineOptions extends DataflowPipelineOptions 
 
   void setCollectBatchData(boolean value);
 
-  @Description("Table name for label annotations")
-  @Default.String("label_annotation")
-  String getLabelAnnotationTable();
+  @Description("Table name for image label annotations")
+  @Default.String("image_label_annotation")
+  String getImageLabelAnnotationTable();
 
-  void setLabelAnnotationTable(String value);
+  void setImageLabelAnnotationTable(String value);
 
-  @Description("Table name for landmark annotations")
-  @Default.String("landmark_annotation")
-  String getLandmarkAnnotationTable();
+  @Description("Table name for image landmark annotations")
+  @Default.String("image_landmark_annotation")
+  String getImageLandmarkAnnotationTable();
 
-  void setLandmarkAnnotationTable(String value);
+  void setImageLandmarkAnnotationTable(String value);
 
-  @Description("Table name for logo annotations")
-  @Default.String("logo_annotation")
-  String getLogoAnnotationTable();
+  @Description("Table name for image logo annotations")
+  @Default.String("image_logo_annotation")
+  String getImageLogoAnnotationTable();
 
-  void setLogoAnnotationTable(String value);
+  void setImageLogoAnnotationTable(String value);
 
-  @Description("Table name for face annotations")
-  @Default.String("face_annotation")
-  String getFaceAnnotationTable();
+  @Description("Table name for image face annotations")
+  @Default.String("image_face_annotation")
+  String getImageFaceAnnotationTable();
 
-  void setFaceAnnotationTable(String value);
+  void setImageFaceAnnotationTable(String value);
 
   @Description("Table name for image properties")
   @Default.String("image_properties")
@@ -123,23 +116,23 @@ public interface VisionAnalyticsPipelineOptions extends DataflowPipelineOptions 
 
   void setImagePropertiesTable(String value);
 
-  @Description("Table name for crop hint annotations")
-  @Default.String("crop_hint_annotation")
-  String getCropHintAnnotationTable();
+  @Description("Table name for image crop hint annotations")
+  @Default.String("image_crop_hint_annotation")
+  String getImageCropHintAnnotationTable();
 
-  void setCropHintAnnotationTable(String value);
+  void setImageCropHintAnnotationTable(String value);
 
   @Description("Table name for video object tracking annotations")
-  @Validation.Required
-  String getVideoObjectTrackingAnnotationsTable();
+  @Default.String("video_object_tracking_annotation")
+  String getVideoObjectTrackingAnnotationTable();
 
-  void setVideoObjectTrackingAnnotationsTable(String value);
+  void setVideoObjectTrackingAnnotationTable(String value);
 
   @Description("Table name for video label annotations")
-  @Validation.Required
-  String getVideoLabelAnnotationsTable();
+  @Default.String("video_label_annotation")
+  String getVideoLabelAnnotationTable();
 
-  void setVideoLabelAnnotationsTable(String value);
+  void setVideoLabelAnnotationTable(String value);
 
   @Description("Table name for error logs")
   @Default.String("error_log")
@@ -148,7 +141,6 @@ public interface VisionAnalyticsPipelineOptions extends DataflowPipelineOptions 
   void setErrorLogTable(String value);
 
   @Description("GCS metadata values to store in BigQuery")
-  @Validation.Required
   Set<String> getMetadataKeys();
 
   void setMetadataKeys(Set<String> value);
