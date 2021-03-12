@@ -33,10 +33,7 @@ import com.google.solutions.ml.apis.processors.Constants;
 import com.google.solutions.ml.apis.processors.MLApiResponseProcessor;
 import com.google.solutions.ml.apis.processors.ProcessorUtils;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import com.google.solutions.ml.apis.*;
 import org.apache.beam.sdk.metrics.Counter;
@@ -56,36 +53,60 @@ public class LandmarkAnnotationProcessor extends ImageMLApiResponseProcessor {
   public final static Counter counter =
       Metrics.counter(MLApiResponseProcessor.class, "numberOfLandmarkAnnotations");
 
+  private final BQDestination destination;
+  private final Set<String> metadataKeys;
+
+  /**
+   * Creates a processor and specifies the table id to persist to.
+   */
+  public LandmarkAnnotationProcessor(String tableId, Set<String> metadataKeys) {
+    this.destination = new BQDestination(tableId);
+    this.metadataKeys = metadataKeys;
+  }
+
   private static class SchemaProducer implements TableSchemaProducer {
 
     private static final long serialVersionUID = 1L;
+    private final Set<String> metadataKeys;
+
+    SchemaProducer(Set<String> metadataKeys) {
+      this.metadataKeys = metadataKeys;
+    }
 
     @Override
     public TableSchema getTableSchema() {
-      return new TableSchema().setFields(
-          ImmutableList.of(
-              new TableFieldSchema()
-                  .setName(Constants.Field.GCS_URI_FIELD)
-                  .setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Constants.Field.MID_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.NULLABLE),
-              new TableFieldSchema()
-                  .setName(Constants.Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Constants.Field.SCORE_FIELD).setType(BigQueryConstants.Type.FLOAT)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Constants.Field.BOUNDING_POLY).setType(BigQueryConstants.Type.RECORD)
-                  .setMode(BigQueryConstants.Mode.NULLABLE).setFields(Constants.POLYGON_FIELDS),
-              new TableFieldSchema()
-                  .setName(Constants.Field.LOCATIONS).setType(BigQueryConstants.Type.GEOGRAPHY).setMode(BigQueryConstants.Mode.REPEATED),
-              new TableFieldSchema()
-                  .setName(Constants.Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
-                  .setMode(BigQueryConstants.Mode.REQUIRED))
-      );
+      ArrayList<TableFieldSchema> fields = new ArrayList<>();
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.GCS_URI_FIELD)
+              .setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.MID_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.NULLABLE));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.SCORE_FIELD).setType(BigQueryConstants.Type.FLOAT)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.BOUNDING_POLY).setType(BigQueryConstants.Type.RECORD)
+              .setMode(BigQueryConstants.Mode.NULLABLE).setFields(Constants.POLYGON_FIELDS));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.LOCATIONS).setType(BigQueryConstants.Type.GEOGRAPHY)
+              .setMode(BigQueryConstants.Mode.REPEATED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Constants.Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+      return new TableSchema().setFields(fields);
     }
   }
 
@@ -93,16 +114,7 @@ public class LandmarkAnnotationProcessor extends ImageMLApiResponseProcessor {
   public TableDetails destinationTableDetails() {
     return TableDetails.create("Google Vision API Landmark Annotations",
         new Clustering().setFields(Collections.singletonList(Constants.Field.GCS_URI_FIELD)),
-        new TimePartitioning().setField(Constants.Field.TIMESTAMP_FIELD), new SchemaProducer());
-  }
-
-  private final BQDestination destination;
-
-  /**
-   * Creates a processor and specifies the table id to persist to.
-   */
-  public LandmarkAnnotationProcessor(String tableId) {
-    destination = new BQDestination(tableId);
+        new TimePartitioning().setField(Constants.Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
   }
 
   @Override
@@ -132,6 +144,8 @@ public class LandmarkAnnotationProcessor extends ImageMLApiResponseProcessor {
                     location.getLatLng().getLatitude() + ")"));
         row.put(Constants.Field.LOCATIONS, locations);
       }
+
+      ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
 
       LOG.debug("Processing {}", row);
       result.add(KV.of(destination, row));

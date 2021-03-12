@@ -19,6 +19,7 @@ package com.google.solutions.ml.apis;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Map;
 
 import static com.google.protobuf.ByteString.*;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
@@ -37,14 +38,16 @@ public class GCSUtils {
     private static final String APPLICATION_NAME = "my-app-name"; // FIXME
     private static Storage storageService;
 
-    public static GCSFileInfo getFileInfo(String gcsURI) {
-        URI uri;
+    private static URI getURI(String gcsURI) {
         try {
-            uri = new URI(gcsURI);
+            return new URI(gcsURI);
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
+    }
 
+    public static GCSFileInfo getFileInfo(String gcsURI) {
+        URI uri = getURI(gcsURI);
         Storage storageClient = getStorageClient();
         Storage.Objects.Get getObject;
         StorageObject object;
@@ -55,17 +58,11 @@ public class GCSUtils {
             throw new RuntimeException(e);
         }
 
-        return new GCSFileInfo(gcsURI, object.getContentType());
+        return new GCSFileInfo(gcsURI, object.getContentType(), object.getMetadata());
     }
 
     public static ByteString getBytes(String gcsURI) {
-        URI uri;
-        try {
-            uri = new URI(gcsURI);
-        } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
-        }
-
+        URI uri = getURI(gcsURI);
         Storage storageClient = getStorageClient();
         Storage.Objects.Get getObject;
         StorageObject object;

@@ -31,7 +31,10 @@ import com.google.solutions.ml.apis.TableSchemaProducer;
 import com.google.solutions.ml.apis.processors.MLApiResponseProcessor;
 import com.google.solutions.ml.apis.processors.ProcessorUtils;
 import com.google.solutions.ml.apis.processors.Constants.Field;
+
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Set;
 
 import com.google.solutions.ml.apis.*;
 import org.apache.beam.sdk.metrics.Counter;
@@ -52,28 +55,48 @@ public class ErrorProcessor extends ImageMLApiResponseProcessor {
       Metrics.counter(MLApiResponseProcessor.class, "numberOfErrors");
   public static final Logger LOG = LoggerFactory.getLogger(ErrorProcessor.class);
 
+  private final BQDestination destination;
+  private final Set<String> metadataKeys;
+
+  /**
+   * Creates a processor and specifies the table id to persist to.
+   */
+  public ErrorProcessor(String tableId, Set<String> metadataKeys) {
+    this.destination = new BQDestination(tableId);
+    this.metadataKeys = metadataKeys;
+  }
+
   private static class SchemaProducer implements TableSchemaProducer {
 
     private static final long serialVersionUID = 1L;
+    private final Set<String> metadataKeys;
+
+    SchemaProducer(Set<String> metadataKeys) {
+      this.metadataKeys = metadataKeys;
+    }
 
     @Override
     public TableSchema getTableSchema() {
-      return new TableSchema().setFields(
-          ImmutableList.of(
-              new TableFieldSchema()
-                  .setName(Field.GCS_URI_FIELD)
-                  .setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.STACK_TRACE).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.NULLABLE),
-              new TableFieldSchema()
-                  .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
-                  .setMode(BigQueryConstants.Mode.REQUIRED))
-      );
+      ArrayList<TableFieldSchema> fields = new ArrayList<>();
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.GCS_URI_FIELD)
+              .setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.STACK_TRACE).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.NULLABLE));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+      return new TableSchema().setFields(fields);
     }
   }
 
@@ -81,16 +104,7 @@ public class ErrorProcessor extends ImageMLApiResponseProcessor {
   public TableDetails destinationTableDetails() {
     return TableDetails.create("Google Vision API Processing Errors",
         new Clustering().setFields(Collections.singletonList(Field.GCS_URI_FIELD)),
-        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer());
-  }
-
-  private final BQDestination destination;
-
-  /**
-   * Creates a processor and specifies the table id to persist to.
-   */
-  public ErrorProcessor(String tableId) {
-    destination = new BQDestination(tableId);
+        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
   }
 
   @Override
@@ -102,11 +116,12 @@ public class ErrorProcessor extends ImageMLApiResponseProcessor {
 
     counter.inc();
 
-    TableRow result = ProcessorUtils.startRow(fileInfo);
-    result.put(Field.DESCRIPTION_FIELD, response.getError().toString());
+    TableRow row = ProcessorUtils.startRow(fileInfo);
+    row.put(Field.DESCRIPTION_FIELD, response.getError().toString());
+    ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
 
-    LOG.debug("Processing {}", result);
+    LOG.debug("Processing {}", row);
 
-    return Collections.singletonList(KV.of(destination, result));
+    return Collections.singletonList(KV.of(destination, row));
   }
 }

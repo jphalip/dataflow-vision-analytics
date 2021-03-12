@@ -169,6 +169,7 @@ public class VisionAnalyticsPipeline {
         BQDynamicDestinations.builder()
             .project(options.getProject())
             .datasetName(options.getDatasetName())
+            .metadataKeys(options.getMetadataKeys())
             .tableNameToTableDetailsMap(
                 tableNameToTableDetailsMap(processors)).build())
     );
@@ -322,30 +323,30 @@ public class VisionAnalyticsPipeline {
     // Image processors ------------------------------------------------------------------------------
 
     String tableName = options.getImageLabelAnnotationTable();
-    result.put(tableName, new LabelAnnotationProcessor(tableName));
+    result.put(tableName, new LabelAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getImageLandmarkAnnotationTable();
-    result.put(tableName, new LandmarkAnnotationProcessor(tableName));
+    result.put(tableName, new LandmarkAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getImageLogoAnnotationTable();
-    result.put(tableName, new LogoAnnotationProcessor(tableName));
+    result.put(tableName, new LogoAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getImageFaceAnnotationTable();
-    result.put(tableName, new FaceAnnotationProcessor(tableName));
+    result.put(tableName, new FaceAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getImagePropertiesTable();
-    result.put(tableName, new ImagePropertiesProcessor(tableName));
+    result.put(tableName, new ImagePropertiesProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getImageCropHintAnnotationTable();
-    result.put(tableName, new CropHintAnnotationProcessor(tableName));
+    result.put(tableName, new CropHintAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getErrorLogTable();
-    result.put(tableName, new ErrorProcessor(tableName));
+    result.put(tableName, new ErrorProcessor(tableName, options.getMetadataKeys()));
 
     // Video processors ------------------------------------------------------------------------------
 
     tableName = options.getVideoObjectTrackingAnnotationTable();
-    result.put(tableName, new VideoObjectTrackingAnnotationProcessor(tableName));
+    result.put(tableName, new VideoObjectTrackingAnnotationProcessor(tableName, options.getMetadataKeys()));
 
     tableName = options.getVideoLabelAnnotationTable();
     result.put(tableName, new VideoLabelAnnotationProcessor(tableName, options.getMetadataKeys()));

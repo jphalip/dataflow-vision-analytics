@@ -115,7 +115,7 @@ public class VideoLabelAnnotationProcessor extends VideoMLApiResponseProcessor {
 //                                                    .setMode("REQUIRED")
 //                                    ))
 
-//            ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+            ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
 
             return new TableSchema().setFields(fields);
         }
@@ -152,7 +152,7 @@ public class VideoLabelAnnotationProcessor extends VideoMLApiResponseProcessor {
                         });
             row.put(Field.FRAMES, frames);
 
-//            ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
+            ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
 
 //            List<TableRow> segments = new ArrayList<>(annotation.getSegmentsCount());
 //            annotation

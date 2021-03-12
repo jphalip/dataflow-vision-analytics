@@ -35,6 +35,7 @@ import com.google.solutions.ml.apis.processors.Constants.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Set;
 
 import com.google.solutions.ml.apis.*;
 import org.apache.beam.sdk.metrics.Counter;
@@ -49,39 +50,61 @@ import org.slf4j.LoggerFactory;
 public class LabelAnnotationProcessor extends ImageMLApiResponseProcessor {
 
   private static final long serialVersionUID = 1L;
+  private final BQDestination destination;
+  private final Set<String> metadataKeys;
   private static final Logger LOG = LoggerFactory.getLogger(LabelAnnotationProcessor.class);
 
   public final static Counter counter =
       Metrics.counter(MLApiResponseProcessor.class, "numberOfLabelAnnotations");
 
+
+  /**
+   * Creates a processor and specifies the table id to persist to.
+   */
+  public LabelAnnotationProcessor(String tableId, Set<String> metadataKeys) {
+    this.destination = new BQDestination(tableId);
+    this.metadataKeys = metadataKeys;
+  }
+
   private static class SchemaProducer implements TableSchemaProducer {
 
     private static final long serialVersionUID = 1L;
+    private final Set<String> metadataKeys;
+
+    SchemaProducer(Set<String> metadataKeys) {
+      this.metadataKeys = metadataKeys;
+    }
 
     @Override
     public TableSchema getTableSchema() {
-      return new TableSchema().setFields(
-          ImmutableList.of(
-              new TableFieldSchema()
-                  .setName(Field.GCS_URI_FIELD)
-                  .setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.MID_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.NULLABLE),
-              new TableFieldSchema()
-                  .setName(Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.SCORE_FIELD).setType(BigQueryConstants.Type.FLOAT)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.TOPICALITY_FIELD).setType(BigQueryConstants.Type.FLOAT)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
-                  .setMode(BigQueryConstants.Mode.REQUIRED))
-      );
+      ArrayList<TableFieldSchema> fields = new ArrayList<>();
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.GCS_URI_FIELD)
+              .setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.MID_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.NULLABLE));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.SCORE_FIELD).setType(BigQueryConstants.Type.FLOAT)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.TOPICALITY_FIELD).setType(BigQueryConstants.Type.FLOAT)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+      return new TableSchema().setFields(fields);
     }
   }
 
@@ -89,16 +112,7 @@ public class LabelAnnotationProcessor extends ImageMLApiResponseProcessor {
   public TableDetails destinationTableDetails() {
     return TableDetails.create("Google Vision API Label Annotations",
         new Clustering().setFields(Collections.singletonList(Field.GCS_URI_FIELD)),
-        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer());
-  }
-
-  private final BQDestination destination;
-
-  /**
-   * Creates a processor and specifies the table id to persist to.
-   */
-  public LabelAnnotationProcessor(String tableId) {
-    destination = new BQDestination(tableId);
+        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
   }
 
   @Override
@@ -118,6 +132,7 @@ public class LabelAnnotationProcessor extends ImageMLApiResponseProcessor {
       row.put(Field.DESCRIPTION_FIELD, annotation.getDescription());
       row.put(Field.SCORE_FIELD, annotation.getScore());
       row.put(Field.TOPICALITY_FIELD, annotation.getTopicality());
+      ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
 
       LOG.debug("Processing {}", row);
       result.add(KV.of(destination, row));

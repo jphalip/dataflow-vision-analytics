@@ -18,10 +18,13 @@ package com.google.solutions.ml.apis;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.auto.value.AutoValue;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
 import org.apache.beam.sdk.extensions.gcp.util.gcsfs.GcsPath;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubMessage;
 import org.apache.beam.sdk.transforms.DoFn;
@@ -70,7 +73,7 @@ public abstract class PubSubNotificationToGCSInfoDoFn extends DoFn<PubsubMessage
       return;
     }
 
-    c.output(new GCSFileInfo(fileName, contentType));
+    c.output(new GCSFileInfo(fileName, contentType, getMetadata(message)));
 
     LOG.debug("GCS URI: {}", fileName);
   }
@@ -89,6 +92,27 @@ public abstract class PubSubNotificationToGCSInfoDoFn extends DoFn<PubsubMessage
       LOG.warn("Failed to parse pubsub payload: ", e);
       return null;
     }
+  }
+
+
+
+  /**
+   * Extract GCS object's metadata from PubSub payload
+   *
+   * @return metadata or null if none found.
+   */
+  private Map<String, String> getMetadata(PubsubMessage message) {
+    try {
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode payloadJson = mapper.readTree(message.getPayload());
+      JsonNode metadata = payloadJson.get("metadata");
+      if (metadata != null) {
+        return mapper.convertValue(metadata, new TypeReference<Map<String, String>>() {});
+      }
+    } catch (IOException e) {
+      LOG.warn("Failed to parse pubsub payload: ", e);
+    }
+    return null;
   }
 
   public static Builder builder() {

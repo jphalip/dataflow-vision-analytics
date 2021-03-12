@@ -38,6 +38,8 @@ import com.google.type.Color;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Metrics;
 import org.apache.beam.sdk.values.KV;
@@ -56,62 +58,82 @@ public class ImagePropertiesProcessor extends ImageMLApiResponseProcessor {
   public final static Counter counter =
       Metrics.counter(MLApiResponseProcessor.class, "numberOfImagePropertiesAnnotations");
 
+  private final BQDestination destination;
+  private final Set<String> metadataKeys;
+
+  /**
+   * Creates a processor and specifies the table id to persist to.
+   */
+  public ImagePropertiesProcessor(String tableId, Set<String> metadataKeys) {
+      this.destination = new BQDestination(tableId);
+      this.metadataKeys = metadataKeys;
+  }
+
   private static class SchemaProducer implements TableSchemaProducer {
 
     private static final long serialVersionUID = 1L;
+    private final Set<String> metadataKeys;
+
+    SchemaProducer(Set<String> metadataKeys) {
+          this.metadataKeys = metadataKeys;
+      }
 
     @Override
     public TableSchema getTableSchema() {
-      return new TableSchema().setFields(
-          ImmutableList.of(
-              new TableFieldSchema()
-                  .setName(Field.GCS_URI_FIELD)
-                  .setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.DOMINANT_COLORS).setType(BigQueryConstants.Type.RECORD)
-                  .setMode(BigQueryConstants.Mode.REQUIRED)
-                  .setFields(ImmutableList.of(
-                      new TableFieldSchema()
-                          .setName(Field.COLORS).setType(BigQueryConstants.Type.RECORD)
-                          .setMode(BigQueryConstants.Mode.REPEATED)
-                          .setFields(ImmutableList.of(
-                              new TableFieldSchema()
-                                  .setName(Field.SCORE_FIELD)
-                                  .setType(BigQueryConstants.Type.FLOAT)
-                                  .setMode(BigQueryConstants.Mode.REQUIRED),
-                              new TableFieldSchema()
-                                  .setName(Field.PIXEL_FRACTION)
-                                  .setType(BigQueryConstants.Type.FLOAT)
-                                  .setMode(BigQueryConstants.Mode.REQUIRED),
-                              new TableFieldSchema()
-                                  .setName(Field.COLOR)
-                                  .setType(BigQueryConstants.Type.RECORD)
-                                  .setMode(BigQueryConstants.Mode.REQUIRED)
-                                  .setFields(ImmutableList.of(
-                                      new TableFieldSchema()
-                                          .setName(Field.COLOR_RED)
-                                          .setType(BigQueryConstants.Type.FLOAT)
-                                          .setMode(BigQueryConstants.Mode.REQUIRED),
-                                      new TableFieldSchema()
-                                          .setName(Field.COLOR_BLUE)
-                                          .setType(BigQueryConstants.Type.FLOAT)
-                                          .setMode(BigQueryConstants.Mode.REQUIRED),
-                                      new TableFieldSchema()
-                                          .setName(Field.COLOR_GREEN)
-                                          .setType(BigQueryConstants.Type.FLOAT)
-                                          .setMode(BigQueryConstants.Mode.REQUIRED),
-                                      new TableFieldSchema()
-                                          .setName(Field.COLOR_ALPHA)
-                                          .setType(BigQueryConstants.Type.FLOAT)
-                                          .setMode(BigQueryConstants.Mode.NULLABLE)
-                                  ))
-                          ))
-                  )),
-              new TableFieldSchema()
-                  .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
-                  .setMode(BigQueryConstants.Mode.REQUIRED))
+      ArrayList<TableFieldSchema> fields = new ArrayList<>();
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.GCS_URI_FIELD)
+              .setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.DOMINANT_COLORS).setType(BigQueryConstants.Type.RECORD)
+              .setMode(BigQueryConstants.Mode.REQUIRED)
+              .setFields(ImmutableList.of(
+                  new TableFieldSchema()
+                      .setName(Field.COLORS).setType(BigQueryConstants.Type.RECORD)
+                      .setMode(BigQueryConstants.Mode.REPEATED)
+                      .setFields(ImmutableList.of(
+                          new TableFieldSchema()
+                              .setName(Field.SCORE_FIELD)
+                              .setType(BigQueryConstants.Type.FLOAT)
+                              .setMode(BigQueryConstants.Mode.REQUIRED),
+                          new TableFieldSchema()
+                              .setName(Field.PIXEL_FRACTION)
+                              .setType(BigQueryConstants.Type.FLOAT)
+                              .setMode(BigQueryConstants.Mode.REQUIRED),
+                          new TableFieldSchema()
+                              .setName(Field.COLOR)
+                              .setType(BigQueryConstants.Type.RECORD)
+                              .setMode(BigQueryConstants.Mode.REQUIRED)
+                              .setFields(ImmutableList.of(
+                                  new TableFieldSchema()
+                                      .setName(Field.COLOR_RED)
+                                      .setType(BigQueryConstants.Type.FLOAT)
+                                      .setMode(BigQueryConstants.Mode.REQUIRED),
+                                  new TableFieldSchema()
+                                      .setName(Field.COLOR_BLUE)
+                                      .setType(BigQueryConstants.Type.FLOAT)
+                                      .setMode(BigQueryConstants.Mode.REQUIRED),
+                                  new TableFieldSchema()
+                                      .setName(Field.COLOR_GREEN)
+                                      .setType(BigQueryConstants.Type.FLOAT)
+                                      .setMode(BigQueryConstants.Mode.REQUIRED),
+                                  new TableFieldSchema()
+                                      .setName(Field.COLOR_ALPHA)
+                                      .setType(BigQueryConstants.Type.FLOAT)
+                                      .setMode(BigQueryConstants.Mode.NULLABLE)
+                              ))
+                      ))
+              ))
       );
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+      return new TableSchema().setFields(fields);
     }
   }
 
@@ -119,16 +141,7 @@ public class ImagePropertiesProcessor extends ImageMLApiResponseProcessor {
   public TableDetails destinationTableDetails() {
     return TableDetails.create("Google Vision API Image Properties",
         new Clustering().setFields(Collections.singletonList(Field.GCS_URI_FIELD)),
-        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer());
-  }
-
-  private final BQDestination destination;
-
-  /**
-   * Creates a processor and specifies the table id to persist to.
-   */
-  public ImagePropertiesProcessor(String tableId) {
-    destination = new BQDestination(tableId);
+        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
   }
 
   @Override
@@ -141,7 +154,7 @@ public class ImagePropertiesProcessor extends ImageMLApiResponseProcessor {
 
     counter.inc();
 
-    TableRow result = ProcessorUtils.startRow(fileInfo);
+    TableRow row = ProcessorUtils.startRow(fileInfo);
 
     DominantColorsAnnotation dominantColors = imageProperties.getDominantColors();
     List<TableRow> colors = new ArrayList<>(dominantColors.getColorsCount());
@@ -164,10 +177,11 @@ public class ImagePropertiesProcessor extends ImageMLApiResponseProcessor {
     );
     TableRow colorsRow = new TableRow();
     colorsRow.put(Field.COLORS, colors);
-    result.put(Field.DOMINANT_COLORS, colorsRow);
+    row.put(Field.DOMINANT_COLORS, colorsRow);
 
-    LOG.debug("Processing {}", result);
+    ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
+    LOG.debug("Processing {}", row);
 
-    return Collections.singletonList(KV.of(destination, result));
+    return Collections.singletonList(KV.of(destination, row));
   }
 }

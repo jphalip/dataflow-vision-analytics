@@ -36,6 +36,7 @@ import com.google.solutions.ml.apis.processors.Constants.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Set;
 
 import com.google.solutions.ml.apis.*;
 import org.apache.beam.sdk.metrics.Counter;
@@ -55,34 +56,56 @@ public class LogoAnnotationProcessor extends ImageMLApiResponseProcessor {
       Metrics.counter(MLApiResponseProcessor.class, "numberOfLogoAnnotations");
   public static final Logger LOG = LoggerFactory.getLogger(LogoAnnotationProcessor.class);
 
+  private final BQDestination destination;
+  private final Set<String> metadataKeys;
+
+  /**
+   * Creates a processor and specifies the table id to persist to.
+   */
+  public LogoAnnotationProcessor(String tableId, Set<String> metadataKeys) {
+    this.destination = new BQDestination(tableId);
+    this.metadataKeys = metadataKeys;
+  }
+
   private static class SchemaProducer implements TableSchemaProducer {
 
     private static final long serialVersionUID = 1L;
+    private final Set<String> metadataKeys;
+
+    SchemaProducer(Set<String> metadataKeys) {
+      this.metadataKeys = metadataKeys;
+    }
 
     @Override
     public TableSchema getTableSchema() {
-      return new TableSchema().setFields(
-          ImmutableList.of(
-              new TableFieldSchema()
-                  .setName(Field.GCS_URI_FIELD)
-                  .setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.MID_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.NULLABLE),
-              new TableFieldSchema()
-                  .setName(Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.SCORE_FIELD).setType(BigQueryConstants.Type.FLOAT)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.BOUNDING_POLY).setType(BigQueryConstants.Type.RECORD)
-                  .setMode(BigQueryConstants.Mode.NULLABLE).setFields(Constants.POLYGON_FIELDS),
-              new TableFieldSchema()
-                  .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
-                  .setMode(BigQueryConstants.Mode.REQUIRED))
-      );
+      ArrayList<TableFieldSchema> fields = new ArrayList<>();
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.GCS_URI_FIELD)
+              .setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.MID_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.NULLABLE));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.DESCRIPTION_FIELD).setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.SCORE_FIELD).setType(BigQueryConstants.Type.FLOAT)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.BOUNDING_POLY).setType(BigQueryConstants.Type.RECORD)
+              .setMode(BigQueryConstants.Mode.NULLABLE).setFields(Constants.POLYGON_FIELDS));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+      return new TableSchema().setFields(fields);
     }
   }
 
@@ -90,16 +113,7 @@ public class LogoAnnotationProcessor extends ImageMLApiResponseProcessor {
   public TableDetails destinationTableDetails() {
     return TableDetails.create("Google Vision API Logo Annotations",
         new Clustering().setFields(Collections.singletonList(Field.GCS_URI_FIELD)),
-        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer());
-  }
-
-  private final BQDestination destination;
-
-  /**
-   * Creates a processor and specifies the table id to persist to.
-   */
-  public LogoAnnotationProcessor(String tableId) {
-    destination = new BQDestination(tableId);
+        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
   }
 
   @Override
@@ -119,6 +133,7 @@ public class LogoAnnotationProcessor extends ImageMLApiResponseProcessor {
       row.put(Field.DESCRIPTION_FIELD, annotation.getDescription());
       row.put(Field.SCORE_FIELD, annotation.getScore());
       ProcessorUtils.extractBoundingPoly(annotation, row);
+      ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
 
       LOG.debug("Processing {}", row);
       result.add(KV.of(destination, row));

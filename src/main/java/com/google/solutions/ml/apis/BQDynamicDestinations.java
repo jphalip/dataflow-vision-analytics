@@ -16,12 +16,16 @@
 
 package com.google.solutions.ml.apis;
 
+import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableReference;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
 import com.google.auto.value.AutoValue;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
+import com.google.solutions.ml.apis.processors.Constants;
 import org.apache.beam.sdk.io.gcp.bigquery.DynamicDestinations;
 import org.apache.beam.sdk.io.gcp.bigquery.TableDestination;
 import org.apache.beam.sdk.values.KV;
@@ -39,6 +43,8 @@ abstract public class BQDynamicDestinations extends
   abstract String project();
 
   abstract String datasetName();
+
+  abstract Set<String> metadataKeys();
 
   abstract Map<String, TableDetails> tableNameToTableDetailsMap();
 
@@ -63,7 +69,17 @@ abstract public class BQDynamicDestinations extends
 
   @Override
   public TableSchema getSchema(BQDestination destination) {
-    return tableDetails(destination).schemaProducer().getTableSchema();
+    TableSchema schema = tableDetails(destination).schemaProducer().getTableSchema();
+
+    // Add metadata fields, if any.
+    TableFieldSchema metadataSchema = new TableFieldSchema()
+        .setName(Constants.Field.METADATA).setType("RECORD")
+        .setMode("REPEATED");
+    for (String key : metadataKeys()) {
+      metadataSchema.set(key, new TableFieldSchema().setName(key).setType("STRING"));
+    }
+    schema.set("metadata", metadataSchema);
+    return schema;
   }
 
   private TableDetails tableDetails(BQDestination destination) {
@@ -84,6 +100,8 @@ abstract public class BQDynamicDestinations extends
     public abstract Builder project(String projectId);
 
     public abstract Builder datasetName(String datasetId);
+
+    public abstract Builder metadataKeys(Set<String> metadataKeys);
 
     public abstract Builder tableNameToTableDetailsMap(
         Map<String, TableDetails> tableNameToTableDetailsMap);

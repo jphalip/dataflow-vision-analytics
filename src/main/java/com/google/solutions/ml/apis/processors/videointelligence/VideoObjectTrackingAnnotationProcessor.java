@@ -16,10 +16,7 @@
 
 package com.google.solutions.ml.apis.processors.videointelligence;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import com.google.api.services.bigquery.model.*;
 import com.google.cloud.videointelligence.v1p3beta1.NormalizedBoundingBox;
@@ -47,65 +44,77 @@ public class VideoObjectTrackingAnnotationProcessor extends VideoMLApiResponsePr
 
     private static final Logger LOG = LoggerFactory.getLogger(VideoObjectTrackingAnnotationProcessor.class);
     private final BQDestination destination;
+    private final Set<String> metadataKeys;
     public final static Counter counter =
             Metrics.counter(MLApiResponseProcessor.class, "numberOfVideoObjectTrackingAnnotations");
 
     /**
      * Creates a processor and specifies the table id to persist to.
      */
-    public VideoObjectTrackingAnnotationProcessor(String tableId) {
-        destination = new BQDestination(tableId);
+    public VideoObjectTrackingAnnotationProcessor(String tableId, Set<String> metadataKeys) {
+        this.destination = new BQDestination(tableId);
+        this.metadataKeys = metadataKeys;
     }
 
     private static class SchemaProducer implements TableSchemaProducer {
 
         private static final long serialVersionUID = 1L;
+        private final Set<String> metadataKeys;
+
+        SchemaProducer(Set<String> metadataKeys) {
+            this.metadataKeys = metadataKeys;
+        }
 
         @Override
         public TableSchema getTableSchema() {
-            return new TableSchema().setFields(
-                    ImmutableList.of(
+            ArrayList<TableFieldSchema> fields = new ArrayList<>();
+            fields.add(
+                new TableFieldSchema()
+                    .setName(Field.GCS_URI_FIELD)
+                    .setType("STRING")
+                    .setMode("REQUIRED"));
+            fields.add(
+                new TableFieldSchema()
+                    .setName(Field.TIMESTAMP_FIELD)
+                    .setType("TIMESTAMP")
+                    .setMode("REQUIRED"));
+            fields.add(
+                new TableFieldSchema()
+                    .setName(Field.ENTITY)
+                    .setType("STRING")
+                    .setMode("REQUIRED"));
+            fields.add(
+                new TableFieldSchema()
+                    .setName(Field.CONFIDENCE).setType("FLOAT"));
+            fields.add(
+                new TableFieldSchema()
+                    .setName(Field.FRAMES).setType("RECORD")
+                    .setMode("REPEATED")
+                    .setFields(ImmutableList.of(
                             new TableFieldSchema()
-                                    .setName(Field.GCS_URI_FIELD)
+                                    .setName(Field.TIME_OFFSET)
                                     .setType("STRING")
                                     .setMode("REQUIRED"),
                             new TableFieldSchema()
-                                    .setName(Field.TIMESTAMP_FIELD)
-                                    .setType("TIMESTAMP")
+                                    .setName(Field.LEFT)
+                                    .setType("FLOAT")
                                     .setMode("REQUIRED"),
                             new TableFieldSchema()
-                                    .setName(Field.ENTITY)
-                                    .setType("STRING")
+                                    .setName(Field.TOP)
+                                    .setType("FLOAT")
                                     .setMode("REQUIRED"),
                             new TableFieldSchema()
-                                    .setName(Field.CONFIDENCE).setType("FLOAT"),
+                                    .setName(Field.RIGHT)
+                                    .setType("FLOAT")
+                                    .setMode("REQUIRED"),
                             new TableFieldSchema()
-                                    .setName(Field.FRAMES).setType("RECORD")
-                                    .setMode("REPEATED")
-                                    .setFields(ImmutableList.of(
-                                            new TableFieldSchema()
-                                                    .setName(Field.TIME_OFFSET)
-                                                    .setType("STRING")
-                                                    .setMode("REQUIRED"),
-                                            new TableFieldSchema()
-                                                    .setName(Field.LEFT)
-                                                    .setType("FLOAT")
-                                                    .setMode("REQUIRED"),
-                                            new TableFieldSchema()
-                                                    .setName(Field.TOP)
-                                                    .setType("FLOAT")
-                                                    .setMode("REQUIRED"),
-                                            new TableFieldSchema()
-                                                    .setName(Field.RIGHT)
-                                                    .setType("FLOAT")
-                                                    .setMode("REQUIRED"),
-                                            new TableFieldSchema()
-                                                    .setName(Field.BOTTOM)
-                                                    .setType("FLOAT")
-                                                    .setMode("REQUIRED")
-                                    ))
-                    )
-            );
+                                    .setName(Field.BOTTOM)
+                                    .setType("FLOAT")
+                                    .setMode("REQUIRED")
+                    ))
+                );
+            ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+            return new TableSchema().setFields(fields);
         }
 
     }
@@ -139,6 +148,7 @@ public class VideoObjectTrackingAnnotationProcessor extends VideoMLApiResponsePr
                         frames.add(frameRow);
                     });
             row.put(Field.FRAMES, frames);
+            ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
             LOG.debug("Processing {}", row);
             result.add(KV.of(destination, row));
         }
@@ -149,6 +159,6 @@ public class VideoObjectTrackingAnnotationProcessor extends VideoMLApiResponsePr
     public TableDetails destinationTableDetails() {
         return TableDetails.create("Google Video Intelligence API object tracking annotations",
                 new Clustering().setFields(Collections.singletonList(Field.GCS_URI_FIELD)),
-                new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer());
+                new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
     }
 }

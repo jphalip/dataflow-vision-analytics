@@ -37,6 +37,7 @@ import com.google.solutions.ml.apis.processors.Constants.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import com.google.solutions.ml.apis.BigQueryConstants;
 import org.apache.beam.sdk.metrics.Counter;
@@ -58,36 +59,55 @@ public class CropHintAnnotationProcessor extends ImageMLApiResponseProcessor {
   public final static Counter counter =
       Metrics.counter(MLApiResponseProcessor.class, "numberOfCropHintAnnotations");
 
+  private final BQDestination destination;
+  private final Set<String> metadataKeys;
+
+  /**
+   * Creates a processor and specifies the table id to persist to.
+   */
+  public CropHintAnnotationProcessor(String tableId, Set<String> metadataKeys) {
+    this.destination = new BQDestination(tableId);
+    this.metadataKeys = metadataKeys;
+  }
+
   private static class SchemaProducer implements TableSchemaProducer {
 
     private static final long serialVersionUID = 1L;
+    private final Set<String> metadataKeys;
+
+    SchemaProducer(Set<String> metadataKeys) {
+      this.metadataKeys = metadataKeys;
+    }
 
     @Override
     public TableSchema getTableSchema() {
-      return new TableSchema().setFields(
-          ImmutableList.of(
-              new TableFieldSchema()
-                  .setName(Field.GCS_URI_FIELD)
-                  .setType(BigQueryConstants.Type.STRING)
-                  .setMode(BigQueryConstants.Mode.REQUIRED),
-              new TableFieldSchema()
-                  .setName(Field.CROP_HINTS).setType(BigQueryConstants.Type.RECORD)
-                  .setMode(BigQueryConstants.Mode.REPEATED)
-                  .setFields(ImmutableList.of(
-                      new TableFieldSchema()
-                          .setName(Field.CONFIDENCE).setType(BigQueryConstants.Type.FLOAT)
-                          .setMode(BigQueryConstants.Mode.REQUIRED),
-                      new TableFieldSchema()
-                          .setName(Field.IMPORTANCE_FRACTION).setType(BigQueryConstants.Type.FLOAT)
-                          .setMode(BigQueryConstants.Mode.REQUIRED),
-                      new TableFieldSchema()
-                          .setName(Field.BOUNDING_POLY).setType(BigQueryConstants.Type.RECORD)
-                          .setMode(BigQueryConstants.Mode.REQUIRED).setFields(Constants.POLYGON_FIELDS)
-                  )),
-              new TableFieldSchema()
-                  .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
-                  .setMode(BigQueryConstants.Mode.REQUIRED))
-      );
+      ArrayList<TableFieldSchema> fields = new ArrayList<>();
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.GCS_URI_FIELD)
+              .setType(BigQueryConstants.Type.STRING)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.CROP_HINTS).setType(BigQueryConstants.Type.RECORD)
+              .setMode(BigQueryConstants.Mode.REPEATED)
+              .setFields(ImmutableList.of(
+                  new TableFieldSchema()
+                      .setName(Field.CONFIDENCE).setType(BigQueryConstants.Type.FLOAT)
+                      .setMode(BigQueryConstants.Mode.REQUIRED),
+                  new TableFieldSchema()
+                      .setName(Field.IMPORTANCE_FRACTION).setType(BigQueryConstants.Type.FLOAT)
+                      .setMode(BigQueryConstants.Mode.REQUIRED),
+                  new TableFieldSchema()
+                      .setName(Field.BOUNDING_POLY).setType(BigQueryConstants.Type.RECORD)
+                      .setMode(BigQueryConstants.Mode.REQUIRED).setFields(Constants.POLYGON_FIELDS)
+              )));
+      fields.add(
+          new TableFieldSchema()
+              .setName(Field.TIMESTAMP_FIELD).setType(BigQueryConstants.Type.TIMESTAMP)
+              .setMode(BigQueryConstants.Mode.REQUIRED));
+      ProcessorUtils.setMetadataFieldsSchema(fields, metadataKeys);
+      return new TableSchema().setFields(fields);
     }
   }
 
@@ -95,16 +115,7 @@ public class CropHintAnnotationProcessor extends ImageMLApiResponseProcessor {
   public TableDetails destinationTableDetails() {
     return TableDetails.create("Google Vision API Crop Hint Annotations",
         new Clustering().setFields(Collections.singletonList(Field.GCS_URI_FIELD)),
-        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer());
-  }
-
-  private final BQDestination destination;
-
-  /**
-   * Creates a processor and specifies the table id to persist to.
-   */
-  public CropHintAnnotationProcessor(String tableId) {
-    destination = new BQDestination(tableId);
+        new TimePartitioning().setField(Field.TIMESTAMP_FIELD), new SchemaProducer(metadataKeys));
   }
 
   @Override
@@ -132,9 +143,10 @@ public class CropHintAnnotationProcessor extends ImageMLApiResponseProcessor {
       cropHintRows.add(cropHintRow);
     }
 
-    TableRow result = ProcessorUtils.startRow(fileInfo);
-    result.put(Field.CROP_HINTS, cropHintRows);
-    LOG.debug("Processing {}", result);
-    return Collections.singletonList((KV.of(destination, result)));
+    TableRow row = ProcessorUtils.startRow(fileInfo);
+    row.put(Field.CROP_HINTS, cropHintRows);
+    ProcessorUtils.addMetadataValues(row, fileInfo, metadataKeys);
+    LOG.debug("Processing {}", row);
+    return Collections.singletonList((KV.of(destination, row)));
   }
 }

@@ -16,13 +16,24 @@
 
 package com.google.solutions.ml.apis.processors;
 
+import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
+import com.google.api.services.storage.Storage;
+import com.google.api.services.storage.model.StorageObject;
 import com.google.cloud.vision.v1.BoundingPoly;
 import com.google.cloud.vision.v1.EntityAnnotation;
 import com.google.solutions.ml.apis.GCSFileInfo;
+import com.google.solutions.ml.apis.GCSUtils;
 import com.google.solutions.ml.apis.processors.Constants.Field;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.joda.time.DateTimeZone;
 import org.joda.time.Instant;
 import org.joda.time.format.DateTimeFormat;
@@ -74,6 +85,40 @@ public class ProcessorUtils {
     row.put(Field.GCS_URI_FIELD, fileInfo.getUri());
     row.put(Field.TIMESTAMP_FIELD, getTimeStamp());
     return row;
+  }
+
+  public static void setMetadataFieldsSchema(List<TableFieldSchema> fields, Set<String> metadataKeys) {
+    if (!metadataKeys.isEmpty()) {
+      List<TableFieldSchema> metadataFields = new ArrayList<>();
+      for (String key : metadataKeys) {
+        metadataFields.add(
+            new TableFieldSchema()
+                .setName(key)
+                .setType("STRING")
+        );
+      }
+      fields.add(new TableFieldSchema()
+          .setName(Field.METADATA)
+          .setType("RECORD")
+          .setFields(metadataFields)
+      );
+    }
+  }
+
+  public static void addMetadataValues(TableRow row, GCSFileInfo fileInfo, Set<String> metadataKeys) {
+    // Add metadata to the row, if any
+    TableRow metadataRow = new TableRow();
+    if (fileInfo.getMetadata() != null) {
+      for (String key : metadataKeys) {
+        String value = fileInfo.getMetadata().get(key);
+        if (value != null) {
+          metadataRow.put(key, value);
+        }
+      }
+    }
+    if (!metadataRow.isEmpty()) {
+      row.put(Field.METADATA, metadataRow);
+    }
   }
 
   private static final DateTimeFormatter TIMESTAMP_FORMATTER =

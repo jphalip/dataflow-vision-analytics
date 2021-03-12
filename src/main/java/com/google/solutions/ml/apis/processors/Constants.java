@@ -29,6 +29,7 @@ import java.util.List;
 public interface Constants {
 
   interface Field {
+    String METADATA = "metadata";
     String BOUNDING_POLY = "bounding_poly";
     String FD_BOUNDING_POLY = "fd_bounding_poly";
     String LOCATIONS = "locations";
@@ -67,7 +68,6 @@ public interface Constants {
     String CROP_HINTS = "crop_hints";
 
     // Video field names:
-    String METADATA = "metadata";
     String ENTITY = "entity";
     String SEGMENTS = "segments";
     String START_TIME_OFFSET = "start_time_offset";

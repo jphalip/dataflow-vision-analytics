@@ -17,6 +17,7 @@
 package com.google.solutions.ml.apis;
 
 import java.io.Serializable;
+import java.util.Map;
 import java.util.Objects;
 
 import org.apache.beam.sdk.coders.AvroCoder;
@@ -29,14 +30,16 @@ public class GCSFileInfo  implements Serializable {
 
     private String uri;
     private String contentType;
+    private Map<String, String> metadata;
 
     GCSFileInfo() {
         // Needed for AvroCoder
     }
 
-    public GCSFileInfo(String uri, String contentType) {
+    public GCSFileInfo(String uri, String contentType, Map<String, String> metadata) {
         this.uri = uri;
         this.contentType = contentType;
+        this.metadata = metadata;
     }
 
     public String getUri() {
@@ -45,6 +48,10 @@ public class GCSFileInfo  implements Serializable {
 
     public String getContentType() {
         return contentType;
+    }
+
+    public Map<String, String> getMetadata() {
+        return metadata;
     }
 
     @Override
@@ -56,7 +63,9 @@ public class GCSFileInfo  implements Serializable {
             return false;
         }
         GCSFileInfo that = (GCSFileInfo) o;
-        return Objects.equals(uri, that.uri) && Objects.equals(contentType, that.contentType);
+        return Objects.equals(uri, that.uri)
+            && Objects.equals(contentType, that.contentType)
+            && metadata.equals(that.metadata);
     }
 
     @Override
